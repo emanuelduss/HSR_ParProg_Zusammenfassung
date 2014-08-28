@@ -2119,7 +2119,7 @@ combinedSales.Subscibe(Console.WriteLine);
 - Problem Shared Memory:
     - Explizite Synchronisation gibt Deadlocks, Starvation, Kosten
     - Race Conditions bei ungenügend Synchronisation
-- Idee aus der DB Welt
+- Idee aus der Datenbankwelt.
 - Ziel von STM: Keine Race Conditions, keine Deadlocks, keine Starvation
 - Atomare Sequenz von Operationen (Read/Write, wie eine grosse atomare Aktion,
   keine inkonsistenten Zwischenstände bemerkbar)
@@ -2129,7 +2129,7 @@ combinedSales.Subscibe(Console.WriteLine);
     - Isolation: Effekte wie eine seriele Ausführung (korrekt wie in der
       seriellen Welt), Parallel aber selbes Verhalten
 - Konzept
-    - Deskriptiv: Was ist atoma? (Nicht wie!)
+    - Deskriptiv: Was ist atomar? (Nicht wie!)
     - Automatische Isolation: Überlasse korrekte Ausführung dem System
     - Einschränkungen: Speiherzugriffe sind isoliert, Seiteneffekte nicht
     - Implementierung: Meist optimistisches Concurrency Control
@@ -2152,7 +2152,6 @@ combinedSales.Subscibe(Console.WriteLine);
 - Auch auf Hardware möglich (Haswell Prozessoren), auch Nested Transaktionen
 - Vorteil: Keine Deadlock-Gefahr, auch im Fehlerfall atomar
 
-
 ~~~~{.java}
 atomic {
   if (balance >= amount) {
@@ -2161,6 +2160,8 @@ atomic {
   balance -= amount;
 }
 ~~~~
+
+## ScalaSTM
 
 - Implementation auf JVM: ScalaSTM
 - Wrapping von Variabeln, damit es im STM System richtig verwendet wird
@@ -2191,7 +2192,6 @@ void withdraw(int amount) {
 
 Rollback und Abbrechen mit Exceptions (weil retry bricht ab):
 
-
 ~~~~{.java}
 STM.atomic(() -> {
   if (balance.get() >= Limit) {
@@ -2201,8 +2201,9 @@ STM.atomic(() -> {
 }
 ~~~~
 
-- Begriff der Serialisierbarkeit (es kann parallel laufen, muss aber aussehen
-  wie es seriell geschehen wäre)
+- Begriff der Serialisierbarkeit: Es kann parallel laufen, muss aber aussehen
+  wie es seriell geschehen wäre.
+- Seiteneffekte: Generell kein IO machen.
 - Write Skew Problem: Isolationsfehler (Bereitschaftsdienst, Schleife), in
   Scala STM nicht möglich
 - Starvation Probleme: Wiederholter Abbruch einer Transaktion (immer wieder
