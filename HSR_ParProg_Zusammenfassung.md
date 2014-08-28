@@ -1230,7 +1230,7 @@ s = "second"; // Atomar, da nur Zuweisung der Referenz
     - Nicht-volatile Zugriffe werden nicht über Grenzen von Synchronisation oder
       volatile Zugriffe optimiert
 
-## Java `volatile`{.java} Keyword:
+## Java `volatile` Keyword
 
 - Atomicity: Atomares Lesen und schreiben (aber nicht i++)
 - Visibility: Lese und Schreibzugriffe via Hauptspeicher propagiert
@@ -1294,35 +1294,34 @@ Die Atomic Klassen machen eine optimistische Synchronisation:
 
 ## GPU Co-Prozessor Architektur
 
-- SM: Streaming Multiprocessor
 - GPU ist Co-Prozessor zur CPU
+- Eine GPU besteht aus mehreren (z. B. 1-30) Streaming Multiprocessors (SM),
+  welche aus mehreren (z. B. 8-192) Streaming Processors (SP) besteht.
 - Single Instruction Multiple Data (SIMD): Vektorparallele Ausführung: Alle
-  Prozessoren müssen zur gleichen Zeit die gleiche Instruktion ausführen, aber
-  auf verschiedenen Daten.
+  Cores innerhalb SM müssen zur gleichen Zeit die gleiche Instruktion
+  ausführen, aber auf verschiedenen Daten. (Voneinander abhängige Daten oder
+  sequenzielle Arbeiten sind nicht möglich).
+- SIMT: Single Instruction Multiple Threads: Dieselbe Operationen werden
+  gleichzeitig in verschiedenen Threads aufgerufen, aber auf verschiedenen
+  Daten.
 - GPU: Hohe Datenparallelität, hohe Memorybandbreite, viele einfache Cores,
   kleine Caches pro Core
 - Non-Uniform Memory Access (NUMA): Kein gemeinsamer Hauptspeicher zwischen GPU
   und CPU. Daten müssen explizit transportiert ewrden.
-
-## Computer Unified Device Architecture (CUDA) Programmiermodell
-
-- CUDA ist ein C API
+- Computer Unified Device Architecture (CUDA) ist ein Programmiermodell und
+  eine API für C.
 
 ## Kernel Definition und Launch
 
-CPU (Device):
-
 ~~~~{.c}
+// GPU (Device)
 __global__
 void VectorAddKernel(float *A, float *B, float *C) {
   int i = threadIdx.x;
   C[i] = A[i] + B[i];
 }
-~~~~
 
-CPU (Host):
-
-~~~~{.c}
+// CPU (Host)
 int main() {
   // ...
   // kernel invocation
@@ -1333,46 +1332,38 @@ int main() {
 
 ## Grid, Block, Thread Aufteilung
 
-- Blöcke: Threads im gleichen Block haben selben SM.
-- Thread = Virtueller Skalarprozessor.
-- Block = virtueller Multiprozessor.
+- Ein Grid hat mehrere Blöcke, welcher mehrere Threads hat.
+- Ein Block ist immer im selben Streaming Multiprozessor.
+- Threads können innerhalb eines Blocks interagieren.
+- Thread = Virtueller Skalarprozessor
+- Block = virtueller Multiprozessor
 - Einzelne Blöcke müssen unabhängig sein, können nicht auf andere warten.
 - Jeder Kernel läuft in einem eigenen Grid.
-- Blocksize: Anzahl Threads pr Block
+- Blocksize: Anzahl Threads per Block
 
 Jeder Kernel hat eigenen Datenteil:
 
 - `threadIdx.x`{.c}: Nummer des Threads innerhalb Block
 - `blockIdx.x`{.c}: Nummer des Blocks
 - `blockDim.x`{.c}: Blockgrösse
-- Weitere Dimensionen y, z nutzbar
+- Weitere Dimensionen `y` und `z` nutzbar
 
-## Launch Configuration
+## Grundgerüst für CUDA
 
-Ausführungsmodell:
-
-- Anzahl Threads als Vielfaches von 32, abhängig 
-
-TODO
-
-Aufteilung in Blöcke:
+Aufteilung in Blöcke (Beispiel Vektoraddition):
 
 ~~~~{.c}
 __global__
 void VectorAddKernel(float *A, float *B, float *C, int N) {
   // Eindeutiger Index basierend auf (Block ID, Thread ID)
   int i = blockIdx.x * blockDim.x + threadIdx.x;
-  // If: Überflüssige Threads machen nichts
-  if (i < N) {
+  if (i < N) { // Überflüssige Threads machen nichts
     C[i] = A[i] + B[i];
   }
 }
-~~~~
 
-~~~~{.c}
-// kernel invocation
+// Kernel invocation: 4 Blöcke * 512 Threads = 2048 Elemente
 VectorAddKernel<<<4, 512>>>(A, B, C, 2048);
-// 4 Blöcke zu 512 Threads = 2048 Elemente
 ~~~~
 
 Grundgerüst:
@@ -1398,7 +1389,7 @@ void CudaVectorAdd(float* A, float* B, float* C, int N) {
 }
 ~~~~
 
-Verbessert:
+Verbessert mit Fehlerbehandlung:
 
 ~~~~{.c}
 handleCudaError(cudaMalloc(&d_A, size));
@@ -1427,64 +1418,36 @@ void handleCudaError(cudaError error) {
 }
 ~~~~
 
-Error Handling:
-
-~~~~{.c}
-cudaError error;
-error = cudaMalloc(&d_A, size);
-if (error != cudaSuccess) {
-  fprintf(stderr, "Failed to allocate device vector A: %s\n",
-    cudaGetErrorString(error));
-  exit(EXIT_FAILURE);
-}
-~~~~
-
 ### Launch Configuration
 
-- Maximale Anzahl Threads per Block
-    - Abhängig von GPU, z.B. 512 oder 1024
-- Blockgrösse als Vielfaches von 32
-    - Sonst sehr ineffizient
-- Überflüssige Threads vermeiden
-    - 2 Blöcke à 1024 => 548 unnütze Threads
-- Streaming Multiprocessor ausschöpfen
-    - Limite für Resident Blöcke und Threads, z.B. 8 und 1536
-- Grosse Blockgrösse hat Vorteile
-    - Threads können nur in Block interagieren
+- Blockgrösse als Vielfaches von 32; Sonst sehr ineffizient
+- Überflüssige Threads vermeiden; 2 Blöcke à 1024 => 548 unnütze Threads
+- Maximale Anzahl Threads per Block; Abhängig von GPU, z.B. 512 oder 1024
+- Streaming Multiprocessor ausschöpfen; Limite für Resident Blöcke und Threads,
+  z.B. 8 und 1536
+- Grosse Blockgrösse hat Vorteile; Threads können nur in Block interagieren
 
 Beispiel:
 
 - Maximale Anzahl Threads per Block = 512
 - Maximale Anzahl Resident Blocks = 8
 - Maximale Anzahl Resident Threads = 1536
-- $\Rightarrow$ 3 Blöcke, 512 Threads pro Block = Nur 36 unnütze Blöcke
+- → 3 Blöcke, 512 Threads pro Block = Nur 36 unnütze Blöcke
 
-Index berechnen mit mehrere Dimensionen:
 
-~~~~{.c}
-id = threadIdx.x + blockIdx.x * blockDim.x
-  + (threadIdx.y + blockIdx.y * blockDimx.y) * line_length
-~~~~
+## Mehrere Dimensionen
 
-## Device Querying
-
-## Compilation, Execution, Debugging
-
-C Limitation:
+- Limitation: C kennt keine mehrdimensionale Arrays:
 
 ~~~~{.c}
-// Gewünscht
+// Problem/Gewünscht:
 float[,] matrix = new float[NofRows, NofCols];
 matrix[row, col] = ...
 
-// Low-Level Initialisierung
+// Lösung: Low-Level Initialisierung:
 float *matrix = (float *)malloc(NofRows * NofCols * sizeof(float));
 matrix[row * NofCols + col] = ...
 ~~~~
-
-## Modellierung mit Thread Hierarchie
-
-### 3D Thread Hierarchie
 
 - Jeder Block wird dreidimensional adressiert (Würfel)
 - Jeder Block kann wieder in weitere Würfel unterteilt werden
@@ -1494,11 +1457,37 @@ dim3 gridDim(3, 2, 1);
 dim3 blockDim(4, 3, 1);
 Call<<<gridDim, blockDim>>>(...);
 ~~~~
+Index berechnen mit mehrere Dimensionen:
+
+~~~~{.c}
+id = threadIdx.x + blockIdx.x * blockDim.x
+  + (threadIdx.y + blockIdx.y * blockDimx.y) * line_length
+~~~~
+
+Kernel für Matrixmultiplikation (2D Modell):
+
+~~~~{.c}
+__global__ // Kernel
+void multiply(float *A, float *B, float *C) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (i < N && j < M) {
+    float sum = 0;
+    for (int k = 0; k < K; k++) {
+      sum += A[i * K + k] * B[k * M + j];
+    }
+    C[i * M + j] = sum;
+  }
+}
+~~~~
 
 ## CUDA-Optimierungstechniken
 
 ### Speichermodell
 
+- Global Memory ist teuer: ca. 600 Zyklen
+- Threads lesen wiederholt selbe Elemente von A und B
 - Shared Memory
     - Per Streaming Multiprocessor
     - Sehr schnell
@@ -1511,12 +1500,15 @@ Call<<<gridDim, blockDim>>>(...);
     - in allen Threads sichtbar
     - Mehrere GB
     - `cuMalloc()` oder `__device__ float x;`
-- Schnellen Speicher "Shared Memory" explizit gemeinsam nutzen
+- Cache/Schnellen Speicher "Shared Memory" explizit gemeinsam nutzen
 
 ### Synchronisation
 
+- Idee: Zwischenresultate (z. B. Spalten und Zeilen bei einer
+  Matrixmultiplikation) in Shared Memory Laden.
+- Threads synchronisieren mittels `__syncthreads()`
 - Jedes `__syncthreads()` Statement ist eine andere Barriere
-- In If-Else nur erlaubt, falls alle Threads eines Blocks nur selbes
+- In If-Else nur erlaubt, falls alle Threads eines Blocks nur das genau selbe
   `__syncthreads` nutzen
 
 ~~~~{.java}
@@ -1528,6 +1520,7 @@ int tx = threadIdx.x, ty = threadIdx.y;
 int col = blockIdx.x * TILE_SIZE + tx;
 int row = blockIdx.y * TILE_SIZE + ty;
 
+// Matrix Multiplikation mit Shared Memory
 for (int tile = 0; tile < nofTiles; tile++) {
   Asub[ty][tx] = A[row * K + tile * TILE_SIZE + tx];
   Bsub[ty][tx] = B[(tile * TILE_SIZE + ty) * M + col];
@@ -1540,27 +1533,40 @@ for (int tile = 0; tile < nofTiles; tile++) {
 
 ### Warps
 
-- Block wird intern in Warps zerlegt (zu je 32 Threads)
-- Alle Threads in Warp führen gleiche Instruktion aus
+- Block wird intern in Warps zerlegt (→ Jedes Warp hat 32 Threads).
+- Alle Threads in Warp führen gleiche Instruktion aus.
 - SMP kann alle Warps eines Blocks beherbergen, da alle dasselbe shared Memory
   sehen und alle müssen die Barriere erreichen (es laufen aber nicht alle
-  parallel)
+  parallel).
+- Ein Warp läuft immer auf einem Streaming Prozessor (deshalb SIMD)
+- Falls ein Warp auf Speicher wartet, führt SP nächsten Warp aus.
 
 ### Divergenz
 
 - Unterschiedliche Verzweigungen im selben Warp
-    - SM führt Instruktion der einen Verzweigung durch und die anderen Threads
-      müssen warten. In der nächsten Verzweigung warten dann die anderen
-      Threads.
-    - Performance Problem
+- SM führt Instruktion der einen Verzweigung durch und die anderen Threads
+  müssen warten. In der nächsten Verzweigung warten dann die anderen
+  Threads.
+- Performance Problem
+
+Deshalb bessere Verzweigungen machen (hier können mindestens 32 Threads das den
+`if`-Block ausführen:
+
+~~~~{.c}
+if (threadIdx.x / 32 > 1) {
+  // foo
+} else {
+  // bar
+}
+~~~~
 
 ### Coalescing
 
-- Zugriffsmuster der Threads sind entscheidend
-- Aufeinanderfolgender Zugriff von Threads auf Daten
+- Zugriffsmuster der Threads sind entscheidend.
+- Aufeinanderfolgender Zugriff von Threads auf Daten.
 - In einer Transaktion auf mehrere Daten zugreifen (Memory Burst)
 - Threads in einem Warp greifen auf alle Elemente einer Burst Section zu
-- Ohne Coalescing gibt es mehrere Einzelzugriffe
+- Ohne Coalescing gibt es mehrere Einzelzugriffe.
 
 ### Performance Empfehlungen
 
@@ -2101,4 +2107,3 @@ STM.atomic(() -> {
 <!--
 # Fortgeschrittene heterogene Parallelisierung
 -->
-
