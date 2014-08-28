@@ -702,6 +702,8 @@ Thread Pool Typen (Klasse `Executors`{.java}):
 - Schneller, wenn Joins geschachtelt sind.
 - Subtasks (mittels `fork()`{.java} kommen zuvorderst in die lokale Task-Queue
   rein (LIFO).
+- Hierarchische Abhängigkeiten mit Untertasks ist erwünscht (keine Gefahr für
+  Deadlocks)
 - `RecursiveAction`{.java}, falls kein Rückgabetyp.
 
 → Task erstellen
@@ -1243,7 +1245,7 @@ s = "second"; // Atomar, da nur Zuweisung der Referenz
 
 - Atomicity: Atomares Lesen und schreiben (aber nicht i++)
 - Visibility: Lese und Schreibzugriffe via Hauptspeicher propagiert
-- Reordering: Keine Umordnung durch Compiler / Laufzeitsyste
+- Reordering: Keine Umordnung durch Compiler / Laufzeitsystem
 - Verhindert Data Race auf Variable
 
 ## Java Atomic Klassen
