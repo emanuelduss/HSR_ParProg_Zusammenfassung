@@ -740,21 +740,30 @@ invokeAll(task3, task4); // Oder einfach beides zusammen
 → Keine überparallelisierung mittels Tresholds
 
 ~~~~{.java}
-protected Boolean compute() {
-  int n = words.size();
-  if (n > Threshold) { // Tuning mit Schwellwert durch Programmierer
-    // parallel search
-    SearchTask left = new SearchTask(words.subList(0, n/2), pattern);
-    SearchTask right = new SearchTask(words.subList(n/2, n), pattern);
-    left.fork(); right.fork();
-    return right.join() || left.join();
+class SumTask extends RecursiveTask<Double> {
+  private double[] array; private int from, to;
+
+  public SumTask(double[] a, int f, int t) {
+    array = a; from = f; to = t;
   }
-  else {
-    // sequential search
-    for (String s: words) {
-      if (s.matches(pattern)) { return true; }
+
+  protected Double compute() {
+    if (to - from >= 1000) { // Tuning mit Schwellwert durch Programmierer
+      int middle = (to + from) / 2;
+      SumTask subTask1 = new SumTask (array, from, middle);
+      SumTask subTask2 = new SumTask (array, middle, to);
+      subTask1.fork(); subTask2.fork();
+      return subTask1.join() + subTask2.join();
+    } else { // Dieser Teil wird sequenziell gelöst
+      return sum(array, from, to);
     }
-    return false;
+  }
+}
+
+public class ParallelSum {
+  public static double parallel_sum(double[] array, int from, int to) {
+    ForkJoinTask<Double> task = new SumTask(array, from, to);
+    return new ForkJoinPool().invoke(task);
   }
 }
 ~~~~
