@@ -118,14 +118,14 @@ myThread.start();
   Exception)
 - Rekursive Locks sind möglich.
 
-Methode als `synchronized`
+Methode als `synchronized`:
 
 ~~~~{.java}
 public synchronized void foo(int bar) { /* baz */ } // Object Lock
 static public synchronized void bar(int foo) { /* baz */ } // Class Lock
 ~~~~
 
-Block als `synchronized`
+Block als `synchronized`:
 
 ~~~~{.java}
 public void foo(int bar) { // Object Lock
@@ -197,7 +197,7 @@ public T get() {
 ~~~~
 
 Wenn Lock auf einzelnes Objekt, muss auch das Notify auf die queue aufgerufen
-werden (`queue.NotifyAll()`).
+werden (`queue.NotifyAll()`{.java}).
 
 ## Wann Single Notify?
 
@@ -214,8 +214,6 @@ werden (`queue.NotifyAll()`).
 
 ## Semaphore
 
-### Beschreibung
-
 - Objekt mit Zähler: Anzahl noch freie Ressourcen (nur positiv)
 - Methode `acquire()`{.java}:
     - Beziehe Ressource (auch mehrere mit `acquire(23)`{.java} möglich)
@@ -224,11 +222,9 @@ werden (`queue.NotifyAll()`).
 - Methode `release()`{.java}:
     - Ressource freigeben
     - Zähler inkrementieren
-- Fairness kann erzwungen werden (FIFO)
+- Fairness kann in Konstruktor mit `true`{.java} erzwungen werden (FIFO).
 
-### Beispiel
-
-Normaler Semaphor:
+Beispiel normaler Semaphor:
 
 ~~~~{.java}
 class BoundedBuffer<T> {
@@ -251,7 +247,7 @@ class BoundedBuffer<T> {
 }
 ~~~~
 
-Binärer Semaphor:
+Beispiel binärer Semaphor (Mutex = Mutial Exclusion):
 
 ~~~~{.java}
 class BoundedBuffer<T> {
@@ -274,9 +270,14 @@ class BoundedBuffer<T> {
 }
 ~~~~
 
-## Lock & Conditions (Auch ein Monitor-Konzept)
+## Lock & Conditions
 
-Monitor mit mehreren Wartelisten für verschiedene Bedingungen.
+- Auch ein Monitor Konzept: Monitor mit mehreren Wartelisten für verschiedene
+  Bedingungen.
+- Pro Bedingung gibt es eine Warteschleife.
+- Fairness ist im Konstruktor mit `true`{.java} aktivierbar.
+- Vorteil: Gezieltes Notifizieren der wartenden Threads (statt alle zu
+  notifizieren).
 
 ~~~~{.java}
 import java.util.concurrent.locks.Lock;
@@ -308,17 +309,16 @@ class BoundedBuffer<T> {
 }
 ~~~~
 
-## ReadWrite Lock
+## ReadWrite Locks
 
 - Problem: Exklusives Recht: Es kann gleichzeitig nur einer im Monitor sein.
-- Paralleles `read` möglich. Wenn Write vorkommt, nicht mehr möglich.
+- Paralleles `read` möglich. Sobald aber ein `write` vorkommt, nicht mehr
+  möglich.
 - Conditions nur auf Write-Locks, da sich auch nur dort etwas ändern kann.
 - Write-Locks haben priorität vor den Read-Locks, mit `true` beim
   Konstruktoraufruf wird der Lock auf fair geschaltet.
 - Bei Verschachtelung können DeadLocks entstehen (`R`-Lock, `RW`-Lock,
   `R`-Unlock, `RW`-Unlock).
-
-Verwendung:
 
 ~~~~{.java}
 ReadWriteLock rwLock = new ReentrantReadWriteLock(true); // Fairer Lock
@@ -335,16 +335,36 @@ rwLock.writeLock().unlock();
 Beispiel:
 
 ~~~~{.java}
-// TODO
+class NameDatabase {
+  private Collection<String> names = new HashSet<>();
+  private ReadWriteLock rwLock = new ReentrantReadWriteLock(true);
+
+  public Collection<String> find(String pattern) {
+    rwLock.readLock().lock();
+    try {
+      return names.stream().filter(n -> n.matches(pattern)); // Read-only
+    } finally {
+      rwLock.readLock().unlock();
+    }
+  }
+  public void put(String name) {
+    rwLock.writeLock().lock();
+    try {
+      names.add(name); // Write
+    } finally {
+      rwLock.writeLock().unlock();
+    }
+  }
+}
 ~~~~
 
 ## Count Down Latch
 
-- Synchronisationsprimitive mit Countdown Zähler
-- Bleibt für immer offen
+- Synchronisationsprimitive mit Countdown Zähler.
+- Bleibt für immer offen.
 - `await()`: Warten bis Countdown `0` ist (kann `InterruptedException` werfen)
-- `countDown()`: Zähler zählt um 1 runter
-- Count Down Latch blockiert bei > 0
+- Blockiert bei `> 0`.
+- `countDown()`: Zähler zählt um 1 runter.
 
 ~~~~{.java}
 CountDownLatch carsReady = new CountDownLatch(N); // Warte auf N cars
@@ -359,12 +379,12 @@ startSignal.countDown();
 ## Cyclic Barrier
 
 - Für zyklische Synchronisationspunkte.
-- `await()` blockiert, bis so viele Threads `await()` aufgerufen haben (kann
-  `InterruptedException` werfen).
+- `await()`{.java} blockiert, bis so viele Threads `await()`{.java} aufgerufen
+  haben (kann `InterruptedException` werfen).
 - Man muss am Anfang wissen, wieviele Threads es sind.
 - Rükgabewert: `> 0` warten und `== 0` Barriere öffnen und Warteende aufwecken
 - Falls mehrere Threads jeweils ein Objekt der Klasse haben, muss die Barriere
-  `static` sein, damit sie auf dieselbe Barriere zugreifen.
+  `static`{.java} sein, damit sie auf dieselbe Barriere zugreifen.
 
 ~~~~{.java}
 CyclicBarrier raceStart = new CyclicBarrier(N); // N Cars
@@ -376,24 +396,24 @@ while (true) {
 
 ## Phaser
 
-- Etwas mehr als eine `Cyclic Barrier`
-- Während der Laufzeit Threads mehrere hinzufügen
+- Verallgemeinerte `Cyclic Barrier`, mit etwas mehr Funktionen.
+- Während der Laufzeit Threads mehrere hinzufügen/entfernen.
 
 ~~~~{.java}
 Phaser phaser = new Phaser(0); // Anfangs keine Player
 phaser.register(); // Anmelden: In der nächsten Runde bin ich dabei
 while (...) {
-  phaser.arriveAndAwaitAdvance();
+  phaser.arriveAndAwaitAdvance(); // Anmelden
   playRound();
 }
-phaser.arriveAndDeregister();
+phaser.arriveAndDeregister(); // Abmelden
 ~~~~
 
 ## Exchanger
 
 - Daten austauschen
-
-Verwendung:
+- Blockiert, bis anderer Thread auch `exchange()`{.java} aufruft.
+- Liefert Argument `x` des jeweils anderen Threads.
 
 ~~~~{.java}
 Exchange<V> e;
@@ -417,13 +437,13 @@ Exchanger<Integer> exchanger = new Exchanger<>();
 }
 ~~~~
 
-## Vergleich
+## Vergleich der Synchronisationspunkten
 
-- Monnitor: 1 Warteraum
-- Lock & Condition: Mehrere Warteräume
-- Semaphore: Wenn == 0, erhöhbar
-- Count Down Latch: Wenn > 0, nicht erhöhbar, nicht rezyklierbar
-- Cyclic Barrier: Rezyklierbar
+- Monnitor: Nur 1 Warteraum.
+- Lock & Condition: Mehrere Warteräume.
+- Semaphore: Wenn `== 0`, erhöhbar (Ressourcen beziehen und freigeben).
+- Count Down Latch: Wenn `> 0`, nicht erhöhbar, nicht rezyklierbar.
+- Cyclic Barrier: Rezyklierbar.
 
 \newpage
 
@@ -431,14 +451,16 @@ Exchanger<Integer> exchanger = new Exchanger<>();
 
 ## Race Conditions
 
-- Race Condition: Ungenügend synchronisierte Zugriffe auf gemeinsame Ressourcen
+- Race Condition: Ungenügend synchronisierte Zugriffe auf gemeinsame
+  Ressourcen.
 - Sobald auf eine Variable ein Write-Zugriff geschieht, können Race Conditions
   auftreten.
-- Unerwartete Resultate und Effekte
-- Fehler können sporadisch oder selten auftreten
-- Schwierig durch Tests zu finden
+- Unerwartete Resultate und Effekte.
+- Fehler können sporadisch oder selten auftreten.
+- Schwierig durch Tests zu finden.
 - Data Races (low level)
-    - Zugriff auf gleichen Speicher (Variablen, Array-Element)
+    - Unsynchronisierter Zugriff auf gleichen Speicher (Variablen,
+      Array-Element)
     - Mindestens ein Write-Zugriff (Reine Read-Zugriffe sind nicht
       problematisch)
 - Semantisch höhere Race Conditions (high-level)
@@ -446,7 +468,7 @@ Exchanger<Integer> exchanger = new Exchanger<>();
       geschützt)
     - Sollte z. B. zusammengehörenh: `account.setBalance(account.getBalance() +
       100);`{.java}
-- Lösung: genügend synchronisieren
+- Lösung: Genügend synchronisieren.
 
 ### Was synchronisieren?
 
@@ -454,6 +476,7 @@ Exchanger<Integer> exchanger = new Exchanger<>();
     - Weitere Nebenläufigkeitsfehler
     - Synchronisation ist teuer
 - Confinement (Einsperrung)
+    - Nur Read-Only Zugriffe
     - Objekt gehört nur einem Thread zu einer Zeit
 - Verstecktes Multi-Threading
     - Finalizers: Über speziellen Finalizer Thread
@@ -468,6 +491,29 @@ Exchanger<Integer> exchanger = new Exchanger<>();
 - Instanzvariabeln sind alle `final`{.java}
     - Primitive Datentypen
 
+~~~~{.java}
+class Configuration {
+  // Instanzvariabeln müssen final sein
+  private final String server;
+  private final int version;
+
+  public Configuration(String server, int version) {
+    this.server = server; this.version = version;
+  }
+
+  // Neues Objekt zurückgeben
+  public Configuration adjust(int newVersion) {
+    return new Configuration(server, newVersion)
+  }
+
+  // Read-Only
+  public String getServer() { return server; }
+  public int getVersion() { return version; }
+
+  // equals and hashCode based on content
+}
+~~~~
+
 ### Confinement (Kapselung)
 
 - Thread Confinement: Objekte nur über Referenzen von einem einzigen Thread
@@ -475,6 +521,8 @@ Exchanger<Integer> exchanger = new Exchanger<>();
 - Object Confinement: Objekt in anderem bereits synchronisieren Objekte
   eingekapselt (Achtung Kapselungsbruch: Falsch wäre, wenn eine Referenz
   zurückgegeben wird, welche die Einkapselung kaputt macht.)
+- Objekte, welche in einem Thread erzeugt werden, sind nur von diesem Thread
+  erreichbar.
 
 ### Thread Safe
 
@@ -493,7 +541,7 @@ Exchanger<Integer> exchanger = new Exchanger<>();
 
 ### Concurrent Collections
 
-- Thread-Save Collections `java.util.concurrent`{.jabva}
+- Effiziente Thread-sichere Collections (`java.util.concurrent`{.java}`).
 - Schwachkonsistente Iteratoren (keine Exceptions, nebenläufige Updates bei
   Iteration)
 
@@ -531,8 +579,8 @@ synchronized(m) { // Muss m locken, nicht s!
 - Deadlocks: Gegenseitiges Aussperren von Threads.
 - Livelock: Verbreauch der CPU während Deadlock.
 - Betriebsmittelgraph
-    - Thread $T$ wartet auf Lock von Ressource $R$: $T$ → $R$
-    - Thread $T$ besitzt Lock auf Ressource $R$: $R$ → $T$
+    - Thread $T$ wartet auf Lock von Ressource $R$: $T$ → $R$.
+    - Thread $T$ besitzt Lock auf Ressource $R$: $R$ → $T$.
 - Alle vier Bedingungen müssen zutreffen
     - Gegenseitiger Ausschluss (Locks)
     - Geschachtelte Locks
@@ -541,11 +589,11 @@ synchronized(m) { // Muss m locken, nicht s!
 
 ### Vermeidung
 
-- Lineare Ordnung der Ressourcen einführen (nur geschachtelt in
-  aufsteigender Reihenfolge sperren. Beispiel: Konten nur nach
-  aufsteigender Nummer sperren.
-- Grobgranulare Locks wählen (Wenn Ordnung nicht möglich/sinnvoll).
-  Beispiel: Gesamte Bank sperren
+- Lineare Ordnung der Ressourcen einführen (nur geschachtelt in aufsteigender
+  Reihenfolge sperren.) Beispiel: Konten nur nach aufsteigender Nummer sperren:
+  Kein Zyklus im Betriebsmittelgraph möglich.
+- Grobgranulare Locks wählen (Wenn Ordnung nicht möglich/sinnvoll).  Beispiel:
+  Gesamte Bank sperren
 
 ## Starvation
 
@@ -573,7 +621,7 @@ synchronized(m) { // Muss m locken, nicht s!
 
 # Thread Pools, Asynchronität
 
-## Idee
+## Thread Pools Idee
 
 - Task Queue: Potentielle Parallele Arbeitspakete (Task) werden in
   Warteschlange eingereiht.
@@ -596,7 +644,7 @@ synchronized(m) { // Muss m locken, nicht s!
 
 ~~~~{.java}
 // Thread-Pool-Auftrag mit Integer Resultat
-// Könnte auch runnable sein, aber ohne Rückgabetyp
+// Ohne Rückgabetyp wird Runnable implementiert
 class ComplexCalculation1 implements Callable<Integer> {
   @Override
   public Integer call() throws Exception {
@@ -626,7 +674,7 @@ Integer result2 = future2.get(); // Blockiert, bis Task beendet ist
 threadPool.shutdown(); // Thread Pool nach Gebrauch abstellen (sonst keine Beendigung)
 ~~~~
 
-Task als Lambdas:
+Ab Java 8 auch als Lambda möglich:
 
 ~~~~{.java}
 Future<Integer> future = threadPool.submit(() -> {
@@ -634,13 +682,14 @@ Future<Integer> future = threadPool.submit(() -> {
   return value;
 });
 ~~~~
+
 Task abbrechen:
 
 ~~~~{.java}
 future1.cancel(true); // Abbrechen; True: macht noch einen Interrupt
 ~~~~
 
-Thread Pool Typen (Klasse `Executors`{.java})
+Thread Pool Typen (Klasse `Executors`{.java}):
 
 - `newFixedThreadPool(int nofThreads)`{.java}: Fixe Anzahl Worker Threads
     - `Runtime.getRuntime().availableProcessors`{.java} für nofThreads
@@ -681,12 +730,11 @@ threadPool.invoke(new MySuperTask()); // Haupt-Task ausführen und auf Beendigun
 → Tasks Joinen (Am besten geschachtelt)
 
 ~~~~{.java}
-task1.fork();
-task2.fork();
-task2.join();
-task1.join();
-// Oder einfacher
-invokeAll(task3, task4);
+task1.fork(); // <-------*
+task2.fork(); // <----*  |
+task2.join(); // <----*  |
+task1.join(); // <-------*
+invokeAll(task3, task4); // Oder einfach beides zusammen
 ~~~~
 
 → Keine überparallelisierung mittels Tresholds
@@ -711,7 +759,7 @@ protected Boolean compute() {
 }
 ~~~~
 
-## Completion Callback
+## Asynchrone Aufrufe mittels Completion Callback
 
 - Asynchrone Operation informiert Caller über Resultat
 - Achtung: Callback wird von anderem Thread als der vom Aufrufer ausgefhrt.
@@ -748,16 +796,35 @@ threadPool.submit(new Runnable() {
 });
 ~~~~
 
+Asynchrone Aufrufe in Java 8 mit Lambda:
+
+~~~~{.java}
+// Asynchroner Aufruf mittels Thread-Pool mit einem worker Thread
+ExecutorService threadPool = Executors.newSingleThreadExecutor();
+Future<Long> future = threadPool.submit(() -> longOperation()); // Task als Lambda
+otherWork();
+process(future.get()); // Resultat über Future
+threadPool.shutdown(); // Nicht vergessen
+~~~~
+
+## Problem: Work Stealing
+
+- Neue Tasks haben Vorrang
+- Neue Tasks werden lokal eingereiht
+- Starvation Gefahr
+
+
 \newpage
 
-# Task Parallel Library
+
+# .NET Task Parallel Library
 
 ## Threading in .NET mit C# 5
 
 ### Threads
 
 ~~~~{.cs}
-Thread myThread = new Thread(() => {
+Thread myThread = new Thread(() => { // Lambda
   for (int i = 0; i < 100; i++) {
     Console.WriteLine("MyThread step {0}", i);
   }
@@ -843,10 +910,12 @@ Task task = Task.Factory.StartNew((obj) => { // Typ object
 
 ### Multi Task Start & Wait
 
-- `Task.WaitAll(taskArray);`{.cs} Ende von allen Tasks abwarten
-- `Task.WaitAny(taskArray);`{.cs} ersten beendete Task abwarten
+- `Task.WaitAll(taskArray);`{.cs}: Ende von allen Tasks abwarten
+- `Task.WaitAny(taskArray);`{.cs}: Ersten beendete Task abwarten
 
 ### Geschachtelte Tasks
+
+Tasks können Subtasks starten und abwarten:
 
 ~~~~{.cs}
 Task.Factory.StartNew(() => {
@@ -857,8 +926,6 @@ Task.Factory.StartNew(() => {
   // ...
 });
 ~~~~
-
-- Tasks können Subtasks starten und abwarten
 
 ### Exceptions in Tasks
 
@@ -925,6 +992,10 @@ Parallel.Foreach(files,
 
 ### Effiziente parallele Aggregation
 
+- Thread-Lokales Teilresultat
+- Resultat gefunden, Schleife stoppen: `loopState.Stop();`
+- Alle Tasks abbrechen: `loopState.Break();`
+
 ~~~~{.cs}
 Parallel.ForEach<FileInfo, long>(files,
   // Initialisierung pro Worker-Thread
@@ -943,12 +1014,10 @@ Parallel.ForEach<FileInfo, long>(files,
 );
 ~~~~
 
-- Resultat gefunden, Schleife stoppen: `loopState.Stop();`
-- Alle Tasks abbrechen: `loopState.Break();`
 
 ### Parallel Loop
 
-Parallel Loop
+Parallel Loop:
 
 ~~~~{.cs}
 Parallel.For(0, N, (i) => {
@@ -958,7 +1027,7 @@ Parallel.For(0, N, (i) => {
 });
 ~~~~
 
-Parallel Loop Partitionierung
+Parallel Loop Partitionierung:
 
 ~~~~{.cs}
 Parallel.ForEach(Partitioner.Create(0, array.Length),
@@ -971,6 +1040,9 @@ Parallel.ForEach(Partitioner.Create(0, array.Length),
 
 ### Parallel LINQ (PLINQ)
 
+- Seiteneffekte nur per Kriterium (where, select) möglich.
+- Race Conditions, Deadlocks möglich.
+
 ~~~~{.cs}
 var result = from foo in numbers.AsParallel() select _IsPrime(foo);
 return result.ToArray();
@@ -980,7 +1052,9 @@ return result.ToArray();
 
 # GUI und Threading
 
-## Threads in GUIs
+## Java Swing
+
+### Threads in GUIs
 
 - GUI Frameworks erlauben nur Single-Threading (Single-Worker-Thread: Nur
   spezieller GUI-Thread darf auf UI Komponente zugreifen)
@@ -992,7 +1066,7 @@ return result.ToArray();
 - Swing ist nicht Thread-safe
     - Thread-Safe sind `repaint()`, `revalidate()`, `addListener()` und `removeListener()`
 
-## Dispatching an UI Thread
+### Dispatching an UI Thread
 
 - UI Zugriffe an Event Dispatch Thread delegieren
 - Event Dispatch Thread wird bei `setVisible()` und `pack()` erzeugt
@@ -1001,6 +1075,7 @@ return result.ToArray();
       Runnable -Objektes im Event Dispatch Thread aus
     - `static void invokeAndWait(Runnable doRun)`: Wartet zusätzlich, bis
       Ausführung fertig ist
+- Statt `Thread.start()`, auch ein Task möglich.
 
 ~~~~{.java}
 class MyButtonActionListener implements ActionListener { // UI Thread
@@ -1016,9 +1091,7 @@ class MyButtonActionListener implements ActionListener { // UI Thread
 }
 ~~~~
 
-- Statt `Thread.start()`, auch ein Task möglich.
-
-## Potentielle Race Condition
+### Potentielle Race Condition
 
 setVisible() darf nicht mehr nach pack() aufgerufen werden, da das GUI dann
 schon existiert und nichts mehr am Thread geändert werden darf.
@@ -1037,7 +1110,7 @@ SwingUtilities.invokeLater(() -> { // Jetzt beides als ein einziger Event einger
 });
 ~~~~
 
-## Swing Background Worker (Hilfsklasse)
+### Swing Background Worker (Hilfsklasse)
 
 - Zeitaufwändige Operationen in separatem Thread: `doInBackground()`
 - UI-Zugriffe durch EventDispatchThread: `done()`
@@ -1075,7 +1148,9 @@ class BackgroundCalculator extends SwingWorker<Integer, Void> {
 
 - Ausführen mittels `new BackgroundCalculator().execute();`
 
-## Asynchronität mit Async/Await
+## .NET GUI Threading Model
+
+### Asynchronität mit Async/Await
 
 - Rückgabetypen: `void`: Fire-and-Forget, `Task`: Keine Rückgabe, aber erlaubt
   Warten auf Ende, `Task<T>`: Für Methode mit Rückgabetype `T`
@@ -1092,41 +1167,37 @@ int result = await task; // Warte auf Beendigung der Async Methode
 //
 ~~~~
 
-<!-- TODO: Teil von Übung einfügen -->
-
 \newpage
 
 # Memory Models
 
 ## Alternativen zu Synchronisation
 
-- Vermeide Synchronisation
-    - Confinement, Immutability
-- Low-Level Cache Konsistenz
-    - Speichergarantien ohne Locks
-- Vermeide Kontextwechsel
-    - Spin Waits
-- Einsatz von Concurrent Collections
-    - Für massive Nebenläufigkeit optimiert
+- Vermeide Synchronisation: Confinement, Immutability
+- Low-Level Cache Konsistenz: Speichergarantien ohne Locks
+- Vermeide Kontextwechsel: Spin Waits
+- Einsatz von Concurrent Collections: Für massive Nebenläufigkeit optimiert
 
 ## Ursachen für Probleme
 
-- Zugriff können in verschiedenen Reihenfolgen geschehen.
+- Weak Consistenc: Zugriff können in verschiedenen Reihenfolgen geschehen.
 - Compiler, Laufzeitsystem und CPUs ordnen die Reihenfolge der Instruktionen.
 - Compiler/Laufzeitsystem kann Variabeln in Register ablegen oder unnötige
   Zuweisungen wegoptimieren.
 
 ## Java Memory Model
 
-Auf stärkere Garantien kann man sich nicht verlassen.
-
+- Atomicy: Unteilbarkeit von Lese- und Schreibzugriffe auf Speicher.
+- Visibility: Sichtbarkeit aktueller Speicherwerte zwischen Threads.
+- Ordering: Reihenfolge von Lese-/Schreiboperationen auf Speicher.
+- JVM könnte stärkere Garantien implementieren, man sollte sich aber nicht drauf verlassen.
 
 ### Atomicy
 
 - Atomicity: (Unteilbarkeit) von Lese- und Schreibzugriffe auf Speicher
-- Primitive Datentypen falls bis 32 Bit
-- Objektreferenzen
-- Volatile Keyword
+- Bei Primitive Datentypen falls bis 32 Bit
+- Bei Objektreferenzen
+- Bei `volatile`{.java} Keyword
 
 ~~~~{.java}
 int i = 1; // Nicht atomar, da in zwei Anweisungen unterteilt (default = 0)
@@ -1135,59 +1206,54 @@ s = "second"; // Atomar, da nur Zuweisung der Referenz
 
 ### Visibility
 
-- Visibility (Sichtbarkeit) aktueller Speicherwerte zwischen Threads
+- Visibility (Sichtbarkeit): aktueller Speicherwerte zwischen Threads
 - Änderungen eines anderen Threads wird evtl. erst später gesehen
-- Verursacht durch Compiler-Optimierung (Hält Variabelnwerte evtl. in
-  Register)
-- Garantiert für:
+- Verursacht durch Compiler-Optimierung (Hält Variabelnwerte evtl. in Register)
+- Java visibility Garantien:
     - Locks Release & Acquire: SchreibenderThread ruft Release und lesender
       thread ruft Acquire für denselben Lock auf
-    - Volatile Variabeln lesen und schreiben
-    - Initialisierung von `final` Variabeln (nach ende des Konstruktors)
+    - Volatile Variabeln: lesen und schreiben
+    - Initialisierung von `final` Variabeln (nach Ende des Konstruktors)
     - Thread-Start und Join, Task Start und Ende
 - Alle Änderungen vor dem Unlock/Release werden für jeden sichtbar, der danach
   Lock/Acquire auf demselben Objekt bezieht.
-- alle Änderungen vor dem volatile Zugriff werdenfür jeden sichtbar, der
-  danach auf dieselbe volatile Variable zugreift.
-
-Volatile Keyword:
-
-- Atomicity: Atomares Lesen und schreiben (aber nicht i++)
-- Visibility: Lese und Schreibzugriffe via Hauptspeicher propagiert
-- Reordering: Keine Umordnung durch Compiler / Laufzeitsyste
+- alle Änderungen vor dem volatile Zugriff werdenfür jeden sichtbar, der danach
+  auf dieselbe volatile Variable zugreift.
 
 ### Ordering
 
 - Ordering (Reihenfolge) von Lese-/Schreibeoperationen auf Speicher
-Java Ordering Garantien:
+- Java Ordering Garantien:
+    - Innerhalb eines Threads: Umsortieren erlaubt
+    - Zwischen Threads: Reihenfolge nur erhalten für Synchronisationsbefehle
+      (synchronized, Lock Acquire/Release, volatile Variabeln)
+    - Nicht-volatile Zugriffe werden nicht über Grenzen von Synchronisation oder
+      volatile Zugriffe optimiert
 
-- Innerhalb eines Threads: Umsortieren erlaubt
-- Zwischen Threads: Reihenfolge nur erhalten für Synchronisationsbefehle
-  (synchronized, Lock Acquire/Release, volatile Variabeln)
-- Nicht-volatile Zugriffe werden nicht über Grenzen von Synchronisation oder
-  volatile Zugriffe optimiert
+## Java `volatile`{.java} Keyword:
 
-### Cache Konsistenz
+- Atomicity: Atomares Lesen und schreiben (aber nicht i++)
+- Visibility: Lese und Schreibzugriffe via Hauptspeicher propagiert
+- Reordering: Keine Umordnung durch Compiler / Laufzeitsyste
+- Verhindert Data Race auf Variable
 
-### Garantien
-
-### Memory Fences
-
-### Atomare Operationen
+## Java Atomic Klassen
 
 - Kein Blockieren oder Warten auf Locks (komplexer als nur atomares Lesen und
   Schreiben)
 - Java Atomic Variables: Atomares Exchange, Test-And-Set und Inkrementieren
 - Effiziente Implementierung (benutzt atomare Instruktionen von Maschine)
 - Garantiert auch Visibility und Ordering
-- `AtomicBoolean`:
+- `AtomicBoolean`{.java}:
     - `getAndSet(boolean newValue)`{.java}: Liefert alten Wert und setzt den
       neuen (atomar)
     - `compareAndSet(boolean expect, boolean update)`{.java}: Liefert alten
       Wert und setzt den neuen (atomar)
-- `AtomicInteger`
-    - `int addAndGet(int delta)`{.java}: `current += delta; return current`{.java}
-    - `int getAndAdd(int delta)`{.java}: `old = current; current += delta; return old`{.java}
+- `AtomicInteger`{.java}:
+    - `int addAndGet(int delta)`{.java}: `current += delta; return
+      current`{.java}
+    - `int getAndAdd(int delta)`{.java}: `old = current; current += delta;
+      return old`{.java}
     - `int decrementAndGet()`{.java}: `return --current`{.java}
     - `int getAndDecrement()`{.java}: `return currentValue--`{.java}
     - `int incrementAndGet()`{.java}: `return ++currentValue`{.java}
@@ -1195,20 +1261,23 @@ Java Ordering Garantien:
 - `AtomicLong`
 - `AtomicReference<V>`
 - `AtomicIntegerArray`, `AtomicLongArray`, `AtomicReferenceArray<V>`
+- `ConcurrentLinkedQueue<V>`, `ConcurrentLinkedDeque<V>`,
+  `ConcurrentSkipListSet<V>`, `ConcurrentHashMap<K, V>`,
+  `ConcurrentSkipListMap<K, V>`
 
-## Lock-freie Datenstrukturen
+Die Atomic Klassen machen eine optimistische Synchronisation:
 
 - Datenstrukturen ohne Locks nur mit atomaren Operationen implementieren
 - Es gibt schon Lockfreie Datenstrukturen (`ConcurrentLinkedQueue<V>`)
-- ABA-Problem <!-- TODO -->
-
-### Lock-Free Stack
-
-### Concurrent Collections
+- Optimistische Synchronisation: Schreibe Änderungen nur, wenn kein anderer
+  Thread zwischenzeltich geschrieben hat. (Wiederholung bei Fehlschlag →
+  Starvation möglich).
+- ABA-Problem: Ein anderen Thread überschreibt unbemerkt dazwischen dasselbe
+  Resultat (muss nicht immer ein Problem sein, je nach Anwendung).
 
 ## NET Memory Model
 
-- long/double auch ohne volatile atomar
+- `long`/`double` auch ohne `volatile` atomar
 - Visibility: Nicht definiert, sondern durch Ordering gegeben
 - Ordering: Volatile ist nur partielle Fence
 - Atomare Instruktion: `Interlocked` Klasse (Atomares Exchange, Add,
@@ -1218,8 +1287,6 @@ Java Ordering Garantien:
 - Volatile Write: Bleibt nach den vorherigen Zugriffen (umordnen nicht
   möglich)
 - Full Fences: `Thread.MemoryBarrier();`{.java}
-
-### Unterschiede
 
 \newpage
 
