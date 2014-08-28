@@ -1812,7 +1812,7 @@ victim.tell(Kill.getInstance(), sender); // Startet Supervision Behandlung!
 ## High-Performance Computing (HPC) Cluster Architektur 
 
 - Cluster: Verbund leistungsfähiger Rechenknoten.
-- Compute Nodes hinter Head Node, mit welchem der Client kommuniziert
+- Compute Nodes hinter Head Node, mit welchem der Client kommuniziert.
 
 ## Jobs und Tasks, Input / Output
 
@@ -1821,7 +1821,8 @@ victim.tell(Kill.getInstance(), sender); // Startet Supervision Behandlung!
 - HPC Task: Ausführung eines Executables, operiert auf Files i Fileshare des
   Clusters, Abhängigkeiten zwischen mehreren Tasks möglich
 - Job/Task Modell ist zu Low-Level: Batch Commands und nur Files als Austausch
-    - Kein Shared Memory
+    - Kein Shared Memory zwischen Nodes
+    - Aber Shared Memory für Cores innerhalb Node.
 - Ein Nachrichtenaustausch ist nötig
 
 ## MPI (Message Passing Interface)
@@ -1872,6 +1873,17 @@ Ausführung (Anzahl Prozesse und CPUs angebbar):
 mpiexec –n 16 FirstMpiProgram.exe
 ~~~~
 
+## Single Programm Multiple Data (SPMD)
+
+- MPI Programm wird in mehrere Prozesse gestartet
+    - Jeder Prozess hat eine eigene ID (Rank)
+    - Prozesse arbeiten unabhängig in ihrem eigenen Adressraum (kein Shared
+      Memory)
+    - Prozesse starten und terminieren Synchron
+- Prozesse können untereinander Kommunizieren
+    - Senden/Empfangen von Nachrichten
+    - Synchronisation mit Barrieren
+
 ### Nachrichtenaustausch über Communicator
 
 - Communicator: Gruppe von MPI-Prozessen
@@ -1883,12 +1895,12 @@ mpiexec –n 16 FirstMpiProgram.exe
       `Communicator.world.Rank`{.cs}
     - Eindeutige ID: Rank, Communicator: `Communicator.world.Size`{.cs}
 
-Direkte Kommunikation:
+### Direkte Kommunikation
 
 ~~~~{.java}
 var world = Communicator.world;
-int rank = world.Rank;
-int size = world.Size;
+int rank = world.Rank; // Prozessnummer
+int size = world.Size; // Anzahl Prozesse
 int tag = 1;
 if (rank == 0) {
   int value = new Random().Next();
@@ -1903,7 +1915,9 @@ if (rank == 0) {
 }
 ~~~~
 
-Broadcast (for-Schleife fällt weg):
+### Broadcast
+
+`for`-Schleife fällt weg:
 
 ~~~~{.cs}
 int value = 0;
@@ -1916,21 +1930,32 @@ Communicator.world.Broadcast(ref value, 0);
 Console.WriteLine("{0} by {1}", value, rank);
 ~~~~
 
-Barriere (warte, bis alle Prozesse die Barriere erreichen):
+#### Barriere
+
+Warte, bis alle Prozesse die Barriere erreichen:
 
 ~~~~{.java}
 Communicator.world.Barrier()
 ~~~~
 
-Reduktion (Aggregation von Teilresultaten zwischen Prozessen):
+### Reduktion
+
+Aggregation von Teilresultaten zwischen Prozessen:
 
 ~~~~{.java}
 world.Allreduce(value, (a, b) => a + b)
 ~~~~
 
-
 - `T Allreduce(T value, Op<T>)`{.cs}: 
 - `T Reduce(T value, Op<T>, int rank)`{.cs}:
+
+## Weitere Nachrichtentypen
+
+- All Total: Jeder sendet verschiedenen Wert an alle anderen
+- Scatter: Einer verteilt verschiedene Werte an alle anderen
+- Gather: Alle senden verschiedenen Wert an einen
+
+
 
 \newpage
 
@@ -2112,7 +2137,3 @@ STM.atomic(() -> {
 - Starvation Probleme: Wiederholter Abbruch einer Transaktion (immer wieder
   Konflikte, lang-laufende Transaktionen, keine Fortschrittsgarantie),
   ScalaSTM: beliebige Wiederholung möglich
-
-<!--
-# Fortgeschrittene heterogene Parallelisierung
--->
