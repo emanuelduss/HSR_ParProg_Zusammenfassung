@@ -1955,8 +1955,6 @@ world.Allreduce(value, (a, b) => a + b)
 - Scatter: Einer verteilt verschiedene Werte an alle anderen
 - Gather: Alle senden verschiedenen Wert an einen
 
-
-
 \newpage
 
 # Reactive Programming
@@ -1968,8 +1966,31 @@ world.Allreduce(value, (a, b) => a + b)
 - Parallele Datenflüsse:
     - Horizontal: Parallel arbeiten
     - Vertikal: Datenmenge teilen
+- Vorteile:
+    - Aktive Datenflüsse statt nur passive LINQ
+    - Skalierbare Parallelität durch Wahl der scheduler
+    - Durchgängig asynchron
+- Nachteile
+    - Zerstückelung komplexer Logiken in Handler
+    - Allfälliger Kontext muss durchgeschleust werden
+    - Komplizierte Aggregation (Observable statt Skalar)
 
-Datenfluss als PLINQ:
+## Datenfluss als PLINQ
+
+- Pull-Mechanismus: Nicht Reactive
+- Auswertung beginnt durch Iterieren der Abfrage
+- Schritte werden rückwärts ausgelüst
+- Input-Quelle ist passiv
+    - Input muss vollständig vorliegen
+    - Wird durch query ausgelesen und verarbeitet
+- Problem
+    - Geht nicht, falls Input sukzessife mit Pausen ankommt (User Input,
+      Netzwerk) oder länge des Streams unbekannt ist.
+- Push Mechanismus (Reactive)
+    - Input unbekannter Länge mit Pausen
+    - Asynchron
+
+Beispiel PLINQ:
 
 ~~~~{.cs}
 from entry in
@@ -1985,30 +2006,25 @@ select
   new { category.Key, sum };
 ~~~~
 
-- Pull Mechanismus
-    - Input-Quelle ist passiv
-    - Input muss komplett vorliegen (wird durch Query ausgelesen und
-      verarbeitet)
-- Push Mechanismus (Reactive)
-    - Input unbekannter Länge mit Pausen
-    - Asynchron
-
 ## Reactive Programming
 
 - Input und Arbeitsschritte sind aktiv: Lösen pro Wert ein Ereignis aus
-  (`OnNext`)
+  (`OnNext`).
 - Verkettung der Arbeitsschritte: Nachfolgeschritt abonniert Events des
-  Vorgängers
+  Vorgängers.
+- Asynchrone Events als Input verwendbar
+- Ähnlich dem Observer-Pattern.
 
 ## .NET Rx (Reactive Extensions)
 
- - Vorgänger (Observable) $\rightarrow$ Nachfolger (Observer)
- - `IObservable<T>`: `Subscribe(Observer<T>)`
+- Vorgänger (Observable) $\rightarrow$ Nachfolger (Observer)
+- `IObservable<T>`: `Subscribe(Observer<T>)`
 - `IObserver<T>`: `OnNext(value: T)`, `OnError(Exception)`, `OnCompleted()`
 - Pipelining möglich: Zwischenschritte haben zwei Rollen (Observer des
   Vorgängers, Observable des Nachfolgers)
 - Subject = Observer + Observable (Beide Interfaces in einem)
 
+Beispiel:
 
 ~~~~{.cs}
 var subject = new Subject<string>();
@@ -2023,8 +2039,14 @@ subject.OnNext("C");
 subject.OnCompleted(); // oder OnError()
 ~~~~
 
-Ad-Hoc Observer Erzeugung
+### Sequenzende
 
+- Observer kann beliebig viele Werte erhalten
+- Beliebige Verzögerung zwischen `OnNext()`{.c}
+- Ende der Sequenz: Erfolgreich mit `OnCompleted()`{.c} und fehlerhaft mit
+  `OnError()`{.c}.
+
+### Ad-Hoc Observer Erzeugung
 
 ~~~~{.cs}
 subject.Subscribe(
@@ -2034,12 +2056,61 @@ subject.Subscribe(
 );
 ~~~~
 
+### Buffer Varianten
+
+- `Subject`: Observer erhält zukünftige Werte; kein Buffer
+- `ReplaySubject`: Observer erhält alle alten Werte; Unbeschränkter Buffer
+- `BehaviorSubject`: Observer erhält letzten Wert; Buffer von einem Element
+- `AsyncSubject`: Schickt letzten Wert bei OnCompleted; Buffer von einem
+  Element
+
+Beispiel ReplaySubject:
+
+~~~~{.c}
+var subject = new ReplaySubject<string>();
+subject.OnNext("A");
+subject.OnNext("B");
+subject.Subscribe(Console.WriteLine);
+subject.OnNext("C");
+~~~~
+
+### Weitere Techniken
+
 - Passive Enumerable zu aktiven Observable umwandeln: `foo.ToObservable()`
 - Observables kombinieren: var combinedSales =
   salesEurope.ToObservable().Merge(alesAsia.ToObservable());`
 - Default ist jedoch alles sequentiell (nacheinander) aber asynchron (kein
   Warten)
-- Concurrency ist aber einfach einstellbar: `observable.ObserveOn(TaskPoolScheduler.Default)`
+- Concurrency ist aber einfach einstellbar:
+  `observable.ObserveOn(TaskPoolScheduler.Default)`
+
+## Parallele Verarbeitung mit TPL
+
+- Synchrone Ausführung (gleicher Thread, Default): `TaskPoolScheduler.Default`
+- Parallele Ausführung in TPL: `NewThreadScheduler.Default`
+- Alle Aufrufe dieses Observable in neuen Thread (GUI Thread):
+  `DispatcherScheduler.Current`
+
+~~~~{.c}
+var sales1 = salesEurope.ToObservable().ObserveOn(TaskPoolScheduler.Default);
+var sales2 = salesAsia.ToObservable().ObserveOn(TaskPoolScheduler.Default);
+var sales3 = salesAmerica.ToObservable().ObserveOn(TaskPoolScheduler.Default);
+var combinedSales = sales1.Merge(sales2).Merge(sales3);
+combinedSales.Subscibe(Console.WriteLine);
+~~~~
+
+## Mögliche Concurrency Fehler
+
+- Race Conditions
+    - Mit Seiteneffekten in Observer möglich
+    - Vermeiden oder synchronisieren
+- Deadlocks
+    - Bei Warteabhängigkeiten in Observer
+    - Blockierende Aufrufe wie `First()`, `Last()` vermeiden
+
+## Kombination mit mit LINQ
+
+- Rx ist mit LINQ kombinierbar
 
 \newpage
 
