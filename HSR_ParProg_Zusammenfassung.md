@@ -1583,7 +1583,7 @@ if (threadIdx.x / 32 > 1) {
 
 ## Motivation
 
-- Herkömmliche Programmiersprachen sind nicht für Nebenläufigkeit designed
+- Herkömmliche Programmiersprachen sind nicht für Nebenläufigkeit designed.
 - Korrekte nebenläufige Programme zu schreiben ist daher besonders schwierig!
 - Fehleranfällig: Race Conditions
 - Schlecht verteilbar: Shared Memory Modell, gemeinsamer Speicher von Threads
@@ -1592,8 +1592,9 @@ if (threadIdx.x / 32 > 1) {
 ## Actor Modell und CSP
 
 - Anderes Programmierkonzept: Aktive Objekte: Objekte haben nebenläufiges
-  Innenleben
-- Kommunikation zwiscen Objekten geschieht über austausch von Nachrichten
+  Innenleben und können miteinander kommunizieren.
+- Kommunikation zwischen Objekten geschieht über austausch von Nachrichten
+- Objekte senden und Empfangen auf einem Kanal.
 - Kein Shared Memory: Austausch von Nachrichten über Kanäle/Mailboxen
 - Implementierungen: Erlang Java Communication Sequencial Process, .NET
 
@@ -1605,8 +1606,21 @@ if (threadIdx.x / 32 > 1) {
     - Nachrichten an Actors senden
     - Entscheiden wie die nächste Nachricht behandelt werden soll
 
-## Communicating Sequential Processes (CSP) von Sir C.A.R. Hoare
+## Vorteile vom Actor Modell
 
+- Nebenläufigkeit
+    - Alle Actors (Objekte) laufen nebenläufig.
+    - Maschine kann grad an Nebenläufigkeit ausnutzen.
+- Keine Race Conditions
+    - Da kein Shared Memory.
+    - Nachrichtenaustausch zur Synchronisation.
+- Gute Verteilbarkeit
+    - Da kein Shared Memory
+    - Nachrichtenaustausch für Netz prädestiniert
+
+## Communicating Sequential Processes (CSP)
+
+- von Sir C.A.R. Hoare
 - Nur ein Modell, keine Programmiersprache
 - Ähnlich zu Actors, nur blockierendes Senden möglich
 - Prozesse kommunizieren über Kanäle
@@ -1630,24 +1644,20 @@ actor B channel c {
 }
 ~~~~
 
-Vorteile:
+## Actors mit Akka
 
-- Alle Objekte (= Aktöre) laufen Nebenläufig
-- Keine Race Conditions da kein Shared Memory und synchroner Narichtenaustausch
-- Gut Verteilbar
-
-## Akka Actors
-
-- Aktive Objekte mit privatem Zustand
-- Akka (für JVM und weitere), Meta-Programmiermodell auf normaler Sprache
-- Eine Mailbox pro Actor
-- Senden ist immer Asynchron
-- Ein Buffer für alle Nachrichten
+- Aktive Objekte mit privatem Zustand.
+- Akka (für JVM und weitere), Meta-Programmiermodell auf normaler Sprache.
+- Jeder Actor hat eine Mailbox
+    - Senden ist immer asynchron.
+    - Ein Buffer für alle Nachrichten.
 - Empfangen
-    - Spezielle Methode wird ausgefhrt
-    - Nur eine Nachricht pro Client auf einmal bedienbar
+    - Spezielle Methode wird ausgefhrt.
+    - Nur eine Nachricht pro Client auf einmal bedienbar.
+    - Effekte: Privater Zustand ändern, Nachrichten Senden, neue Actors
+      erzeugen.
 
-Einfacher Actor
+Actor als Empfänger:
 
 ~~~~{.java}
 public class NumberPrinter extends UntypedActor {
@@ -1659,8 +1669,7 @@ public class NumberPrinter extends UntypedActor {
 }
 ~~~~
 
-Senden:
-
+Senden an den Actor:
 
 ~~~~{.java}
 ActorSystem system = ActorSystem.create("System");
@@ -1676,23 +1685,23 @@ for (int i = 0; i < 100; i++) {
 system.shutdown(); // Gebe "End-Signal" an alle Actors
 ~~~~
 
-Actor Referenzen:
+## Actor Referenzen
 
 - Verhindert Methodenaufrufe / Variablenzugriffe
-- Art Kanal
-- Beispiele: Alternative zu Threads, Transaction-Processing, Backend für
-  Service, Kommunikations-Hub
+- Kommunikation über eine Art Kanal
+- Beispiele für Actors
+    - Alternative zu Threads
+    - Transaction-Processing
+    - Backend für Service
+    - Kommunikations-Hub
+- Patterns für das Senden und Empfangen
+    - Pattern: Producer - Consumer
+    - Pattern: Pipeline
+    - Pattern: Map-Reduce: Aufgabe an Worker-Actors verteilen
 
-### Senden und Empfangen
-
-- Pattern: Producer - Consumer
-- Pattern: Pipeline
-- Pattern: Map-Reduce: Aufgabe an Worker-Actors verteilen
-
-### Verteilung
+## Verteilung
 
 - Senden und Empfangen von serialisierten immutable Nachrichten
-
 
 Server:
 
@@ -1726,14 +1735,14 @@ ActorSelection printer = system.actorSelection("akka.tcp://consumer@server:2552/
 printer.tell(123, ActorRef.noSender());
 ~~~~
 
-Remoting:
+## Remoting
 
-- `system.actorSelection`{.java} mit URL
-- ActorSelection: Leichtgewichtiger als ActorRef
-- Remote Erzeugen: system.actorOf(...), application.conf spezifiziert, wo Actor
-  erstellt wird
+- `system.actorSelection`{.java} mit URL.
+- ActorSelection: Leichtgewichtiger als ActorRef.
+- Remote Erzeugen: `system.actorOf(...)`, `application.conf` spezifiziert, wo
+  Actor erstellt wird.
 
-Hierarchien:
+## Hierarchien
 
 - Passend zu URL Adressierungsschema
 - Erzeuger is Parent
@@ -1751,14 +1760,14 @@ Akka Synchrones Senden (Empfänger muss antworten, sonst Timeout)
 Future<Object> result = Patterns.ask(actorRef, msg, timeout); // Antwort ist Untyped
 ~~~~
 
-Messages:
+## Messages:
 
 - Serializable Classes
 - Immutable (Value Objects), Attribute Final, Collections in
   `Collections.unmodifiableList` wrappen, keine Methoden mit Seiteneffekten
 - Viel Schreibaufwand für Message-Klassen → einfacher mit Scala-API
 
-Akka Laufzeitsysten
+## Akka Laufzeitsysten
 
 - Dispatches zur Ausführung
 - Typischerweise ein Java Fork-Join Thread Pool
@@ -1775,9 +1784,9 @@ Akka Laufzeitsysten
 - Parent von `/usr` ist der Root Guardian
 - Zusätzlicher `/system` Actor für Logging, Shutdown
 
-Shutdown
+## Shutdown
 
-- Wenn Maiblxo leer? Actor könnte noch beschäftigt sein.
+- Wenn Maiblox leer? Actor könnte noch beschäftigt sein.
 - Applikation muss Actor selber stoppen.
 
 ~~~~{.java}
