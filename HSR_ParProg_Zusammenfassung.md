@@ -1190,10 +1190,21 @@ class BackgroundCalculator extends SwingWorker<Integer, Void> {
   asynchron)
 - Zwei Stücke: Zuerst synchron, danach asynchron
 
+Beispiel:
+
 ~~~~{.java}
-public async Task<int> LongOperationAsync() { ... } // Async Methode
+async Task<string> ConcatWebSitesAsync(string url1, string url2) {
+  HttpClient client = new HttpClient();
+  Task<string> download1 = client.GetStringAsync(url1);
+  Task<string> download2 = client.GetStringAsync(url2);
+  string site1 = await download1;
+  string site2 = await download2;
+  return site1 + site2;
+} // Async Methode
+
 // ...
-Task<int> task = LongOperationAsync();
+
+Task<string> task = ConcatWebSitesAsync(s1, s2);
 OtherWork();
 int result = await task; // Warte auf Beendigung der Async Methode
 //
