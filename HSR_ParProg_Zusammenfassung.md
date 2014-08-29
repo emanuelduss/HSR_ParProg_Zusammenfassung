@@ -58,13 +58,13 @@ Thread myThread = new Thread(new SimpleLogic());
 
 ~~~~{.java}
 void startMyThread(final String label, final int nofIt) { // Explizit final!
-  new Thread() {
+  new Thread(new Runnable() {
     @Override public void run() {
       for (int i = 0; i < nofIt; i++) {
         System.out.println(i + " " + label);
       }
     }
-  }.start();
+  }).start();
 }
 
 startMyThread("A", 10);
@@ -166,9 +166,9 @@ class BankAccount {
 ~~~~
 
 *Problem 1*: Wait mit If: Aufgeweckter Thread muss um Monitor-Eintritt kämpfen:
-Während der Zeit die zum Eintreten in den Monitor benötigt wird kann der Thread
-wieder unterbrochen werden und die Wartebedingung invalidieren. Zudem können
-Spurious Wakeups von Java dazu führen, dass Threads einfach so aufgeweckt
+Während der Zeit die zum Eintreten in den Monitor benötigt wird kann ein anderer Thread
+den aktuellen unterbrechen ("überholen") und die Wartebedingung invalidieren (overrun issue). 
+Zudem können Spurious Wakeups von Java dazu führen, dass Threads einfach so aufgeweckt
 werden.
 
 Lösung: Wartebedingung in Schlaufe testen:
@@ -595,6 +595,8 @@ synchronized(m) { // Muss m locken, nicht s!
 - Grobgranulare Locks wählen (Wenn Ordnung nicht möglich/sinnvoll).  Beispiel:
   Gesamte Bank sperren
 
+\newpage
+
 ## Starvation
 
 - Starvation: Ein Thread kriegt nie die Chance, eine Ressource zuzugreifen.
@@ -616,6 +618,25 @@ synchronized(m) { // Muss m locken, nicht s!
   prioritärem Thread
     - Normale Threads können dazwischenlaufen
     - Tief und hoch prioritärer Thread verhungern
+
+### Beispiel
+
+Dining Philosophers:
+
+Nimmt linke Gabel und versucht Rechte zu nehmen. Wenn diese bereits
+besetzt ist, legt er die Linke wieder hin und probiert es erneut.
+(Wenn Prio zu niedrig verhungert Thread / Philosoph).
+ 
+
+ Code Beispiel:
+
+~~~~{.java}
+do {
+	boolean success = other.withdraw(100);
+} while (!success);
+
+mine.deposit(100);
+~~~~
 
 \newpage
 
@@ -1554,14 +1575,13 @@ for (int tile = 0; tile < nofTiles; tile++) {
 
 ### Divergenz
 
-- Unterschiedliche Verzweigungen im selben Warp
+- Unterschiedliche Verzweigungen im selben Warp.
 - SM führt Instruktion der einen Verzweigung durch und die anderen Threads
   müssen warten. In der nächsten Verzweigung warten dann die anderen
   Threads.
 - Performance Problem
 
-Deshalb bessere Verzweigungen machen (hier können mindestens 32 Threads das den
-`if`-Block ausführen:
+Deshalb bessere Verzweigungen machen:
 
 ~~~~{.c}
 if (threadIdx.x / 32 > 1) {
