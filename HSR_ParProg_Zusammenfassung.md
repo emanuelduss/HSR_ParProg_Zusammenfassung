@@ -1766,6 +1766,67 @@ ActorSelection printer = system.actorSelection("akka.tcp://consumer@server:2552/
 printer.tell(123, ActorRef.noSender());
 ~~~~
 
+## Beispiel Ping Pong
+
+~~~~{.java}
+public class PingPong {
+
+  static final FiniteDuration FIVE_SECONDS = Duration.create(5, TimeUnit.SECONDS);
+
+  public static void main(String[] args) {
+    ActorSystem system = ActorSystem.create("PingPong");
+
+    ActorRef p1 = system.actorOf(Props.create(PingPongActor.class), "P1");
+    ActorRef p2 = system.actorOf(Props.create(PingPongActor.class), "P2");
+
+    p1.tell(new Start(), p2);
+
+    // Aufgabe c) Sending a reset message
+    system.scheduler().schedule(FIVE_SECONDS, FIVE_SECONDS, p1, new Reset(), 
+      system.dispatcher(), ActorRef.noSender());
+  }
+
+  static class Start { }
+  static class Reset { }
+  static class Ping {
+    final int count;
+    public Ping(int count) { this.count = count; }
+  }
+
+  static class PingPongActor extends UntypedActor {
+    private boolean reset = false;
+
+    public void onReceive(Object message) {
+      if (message instanceof Start) { handleStart((Start) message); }
+      else if (message instanceof Ping) { handlePing((Ping) message); }
+      else if (message instanceof Reset) { handleReset(); }
+      else { unhandled(message); }
+    }
+
+    private void handleReset() { reset = true; }
+
+    private void handlePing(Ping msg) {
+      System.out.println(getSelf().path().name() + ": Ping " + msg.count);
+      try {
+        Thread.sleep((long) (Math.random() * 1000) + 300);
+      } catch (InterruptedException e) { }
+
+      // Aufgabe b
+      if(reset) {
+        reset = false;
+        getSender().tell(new Ping(0), getSelf()); }
+      else if (msg.count == 10) { getContext().system().shutdown(); }
+      else { getSender().tell(new Ping(msg.count + 1), getSelf()); }
+    }
+
+    private void handleStart(Start message) {
+      System.out.println("Starting ...");
+      getSender().tell(new Ping(0), getSelf());
+    }
+  }
+}
+~~~~
+
 ## Remoting
 
 - `system.actorSelection`{.java} mit URL.
@@ -1791,7 +1852,7 @@ Akka Synchrones Senden (Empfänger muss antworten, sonst Timeout)
 Future<Object> result = Patterns.ask(actorRef, msg, timeout); // Antwort ist Untyped
 ~~~~
 
-## Messages:
+## Messages
 
 - Serializable Classes
 - Immutable (Value Objects), Attribute Final, Collections in
